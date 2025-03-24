@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/gridLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:columnCount="3"
+    android:rowCount="7"
+    android:padding="16dp">
+
+    <!-- Row 0: Dice Display -->
+    <LinearLayout
+        android:layout_row="0"
+        android:layout_column="0"
+        android:layout_columnSpan="3"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="10dp">
+
+        <ImageView
+            android:id="@+id/dice1"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/dice_1"
+            android:layout_margin="5dp"
+            android:clickable="true"
+            android:visibility="visible" />
+
+        <ImageView
+            android:id="@+id/dice2"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/dice_2"
+            android:layout_margin="5dp"
+            android:clickable="true"
+            android:visibility="visible"/>
+
+        <ImageView
+            android:id="@+id/dice3"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/dice_1"
+            android:layout_margin="5dp"
+            android:clickable="true"
+            android:visibility="visible" />
+        <ImageView
+            android:id="@+id/dice4"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/dice_1"
+            android:layout_margin="5dp"
+            android:clickable="true"
+            android:visibility="visible" />
+        <ImageView
+            android:id="@+id/dice5"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/dice_6"
+            android:layout_margin="5dp"
+            android:clickable="true"
+            android:visibility="visible" />
+    </LinearLayout>
+
+    <!-- Row 1: Main Action Buttons -->
+    <Button
+        android:id="@+id/rollButton"
+        android:layout_row="1"
+        android:layout_column="0"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Roll Dice" />
+
+    <Button
+        android:id="@+id/helpButton"
+        android:layout_row="1"
+        android:layout_column="1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Help" />
+
+    <Button
+        android:id="@+id/logButton"
+        android:layout_row="1"
+        android:layout_column="2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Log" />
+
+    <!-- Row 2: Additional Buttons -->
+    <Button
+        android:id="@+id/manualInputButton"
+        android:layout_row="2"
+        android:layout_column="0"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Manual Input" />
+
+    <Button
+        android:id="@+id/continueButton"
+        android:layout_row="2"
+        android:layout_column="1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Continue"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/standButton"
+        android:layout_row="2"
+        android:layout_column="2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Stand" />
+
+    <!-- Row 3: Save/Load Buttons -->
+    <Button
+        android:id="@+id/saveButton"
+        android:layout_row="3"
+        android:layout_column="0"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Save Game" />
+
+    <Button
+        android:id="@+id/loadButton"
+        android:layout_row="3"
+        android:layout_column="2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Load Game" />
+
+    <!-- Row 4: Score Display -->
+    <TextView
+        android:id="@+id/scoreTextView"
+        android:layout_row="4"
+        android:layout_column="0"
+        android:layout_columnSpan="3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Scores: Human: 0 | Computer: 0"
+        android:textSize="18sp"
+        android:gravity="center"
+        android:layout_marginTop="10dp" />
+
+    <!-- Row 5: Game Feedback -->
+    <TextView
+        android:id="@+id/gameFeedbackText"
+        android:layout_row="5"
+        android:layout_column="0"
+        android:layout_columnSpan="3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Welcome to Yahtzee!"
+        android:textSize="16sp"
+        android:layout_marginTop="10dp"
+        android:scrollbars="vertical" />
+
+    <!-- Row 6: Scorecard Table -->
+    <ScrollView
+        android:layout_row="6"
+        android:layout_column="0"
+        android:layout_columnSpan="3"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_rowWeight="1"
+        android:layout_gravity="fill"
+        android:fillViewport="true"
+        android:background="#FFFFFF"
+        android:layout_marginTop="10dp">
+
+        <TableLayout
+            android:id="@+id/scorecardTable"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stretchColumns="*"
+            android:padding="8dp">
+
+            <!-- The header and content rows will be added programmatically -->
+
+        </TableLayout>
+    </ScrollView>
+
+</GridLayout>
