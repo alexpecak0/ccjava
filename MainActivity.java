@@ -35,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private Button saveButton;
     private Button loadButton;
     private Button manualInputButton;
+    private Button continueButton;
     private TextView scoreTextView;
     private TextView gameFeedbackText;
 
@@ -107,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
         saveButton = findViewById(R.id.saveButton);
         loadButton = findViewById(R.id.loadButton);
         manualInputButton = findViewById(R.id.manualInputButton);
+        continueButton = findViewById(R.id.continueButton);
 
         // Initialize text views
         scoreTextView = findViewById(R.id.scoreTextView);
@@ -141,7 +143,9 @@ public class MainActivity extends AppCompatActivity {
         saveButton.setOnClickListener(v -> saveGame());
         loadButton.setOnClickListener(v -> loadGame());
         manualInputButton.setOnClickListener(v -> showManualDiceInput());
+        continueButton.setOnClickListener(v -> handleContinueButton());
     }
+
     private void handleStandButton() {
         if (currentPlayer != humanPlayer || rollCount == 0) {
             return;  // Only handle stand button for human player after at least one roll
@@ -155,6 +159,7 @@ public class MainActivity extends AppCompatActivity {
         standButton.setEnabled(false);
         updateUI();
     }
+
     private void determineFirstPlayer() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Determine First Player");
@@ -185,15 +190,23 @@ public class MainActivity extends AppCompatActivity {
         });
         builder.show();
     }
+
     private void startTurn() {
         rollCount = 0;
         resetDiceSelections();
         if (currentPlayer == computerPlayer) {
             handleComputerTurn();
         } else {
-            enableHumanTurnUI();
+            handleHumanTurn();
         }
         updateUI();
+    }
+
+    private void handleHumanTurn() {
+        enableHumanTurnUI();
+        continueButton.setVisibility(View.VISIBLE);
+        continueButton.setText("Start Your Turn");
+        showMessage("Click 'Start Your Turn' to begin");
     }
 
     private void handleRollButton() {
@@ -217,8 +230,10 @@ public class MainActivity extends AppCompatActivity {
         // Add this line:
         standButton.setEnabled(true);
 
+        // Remove automatic category selection after third roll
         if (rollCount == 3) {
-            promptForCategorySelection();
+            showMessage("Maximum rolls reached. Click 'Stand' to select a category.");
+            rollButton.setEnabled(false);
         }
     }
 
@@ -243,28 +258,9 @@ public class MainActivity extends AppCompatActivity {
         disableHumanTurnUI();
         rollCount = 0;
         resetDiceSelections();
-
-        // Add this dialog to choose between manual and random
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Computer Turn")
-                .setMessage("Choose dice input method")
-                .setPositiveButton("Random", (dialog, which) -> {
-                    // Original computer turn logic
-                    new Handler().postDelayed(() -> {
-                        dice = new Dice();
-                        dice.rollAll();
-                        rollCount++;
-                        updateDiceImages();
-                        String analysis = computerPlayer.analyzeRoll(dice.getValues());
-                        showMessage("Computer's Analysis:\n" + analysis);
-                        new Handler().postDelayed(() -> processComputerNextRoll(), 2000);
-                    }, 1000);
-                })
-                .setNegativeButton("Manual", (dialog, which) -> {
-                    manualInputButton.setEnabled(true);  // Enable manual input for computer
-                    showManualDiceInput();
-                })
-                .show();
+        continueButton.setVisibility(View.VISIBLE);
+        continueButton.setText("Start Computer Turn");
+        showMessage("Click 'Start Computer Turn' to begin Computer's turn");
     }
 
     private void processComputerNextRoll() {
@@ -346,16 +342,26 @@ public class MainActivity extends AppCompatActivity {
 
     private void computerSelectCategory() {
         String category = computerPlayer.selectCategory(dice.getValues());
+
+        // If category is null, computer wants to roll again
+        if (category == null) {
+            if (rollCount < 3) {
+                selectedDice = computerPlayer.getSelectedDice();
+                showComputerInputDialog();
+                return;
+            }
+            // If we're on our last roll, we have to select a category
+            category = computerPlayer.getAvailableCategories().get(0);
+        }
+
         int score = Helper.calculateScore(category, dice.getValues());
         computerPlayer.fillCategory(category, score);
-        // Add this line right here, after fillCategory:
         updateScorecardDisplay(category, score, false, roundNumber);
-
         showMessage("Computer selects " + category + " for " + score + " points");
 
         new Handler().postDelayed(() -> {
             endTurn();
-        }, 2000);
+        }, 1500);
     }
 
     private void promptForCategorySelection() {
@@ -469,10 +475,36 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateButtonStates() {
         boolean isHumanTurn = currentPlayer == humanPlayer;
-        rollButton.setEnabled(isHumanTurn && rollCount < 3);
+
+        // Handle roll and stand buttons
+        if (isHumanTurn) {
+            if (rollCount == 0) {
+                // At start of turn, roll button should be enabled after clicking continue
+                rollButton.setEnabled(true);
+            } else {
+                // After first roll, only enable if under 3 rolls
+                rollButton.setEnabled(rollCount < 3);
+            }
+        } else {
+            rollButton.setEnabled(false);
+        }
+
         standButton.setEnabled(isHumanTurn && rollCount > 0);
         helpButton.setEnabled(isHumanTurn);
         manualInputButton.setEnabled(isHumanTurn);
+
+        // Handle continue button visibility
+        if (isHumanTurn) {
+            // Show continue button only at start of human turn
+            if (rollCount == 0 && continueButton.getVisibility() == View.VISIBLE) {
+                return;
+            }
+            continueButton.setVisibility(View.GONE);
+        } else if (continueButton.getVisibility() == View.VISIBLE) {
+            // Keep continue button visible during computer turn if it's already showing
+            return;
+        }
+        continueButton.setVisibility(View.GONE);
     }
 
     private void showMessage(String title, String message) {
@@ -735,21 +767,14 @@ public class MainActivity extends AppCompatActivity {
                         if (currentPlayer == computerPlayer) {
                             String analysis = computerPlayer.analyzeRoll(dice.getValues());
                             showMessage("Computer's Analysis:\n" + analysis);
-                            new Handler().postDelayed(() -> {
-                                if (rollCount == 1) {  // First roll
-                                    if (computerPlayer.shouldRollAgain()) {
-                                        processComputerNextRoll();
-                                    } else {
-                                        computerSelectCategory();
-                                    }
-                                } else {  // This is a reroll
-                                    if (rollCount < 3 && computerPlayer.shouldRollAgain()) {
-                                        processComputerNextRoll();
-                                    } else {
-                                        computerSelectCategory();
-                                    }
-                                }
-                            }, 2000);
+
+                            if (rollCount < 3) {
+                                continueButton.setText("Continue to Roll " + (rollCount + 1));
+                                continueButton.setVisibility(View.VISIBLE);
+                            } else {
+                                continueButton.setText("Select Category");
+                                continueButton.setVisibility(View.VISIBLE);
+                            }
                         }
                     } else {
                         showMessage("Please select a value for each die");
@@ -757,6 +782,60 @@ public class MainActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void handleContinueButton() {
+        if (currentPlayer == computerPlayer) {
+            if (rollCount == 0) {
+                showComputerInputDialog();
+            } else if (rollCount < 3 && computerPlayer.shouldRollAgain()) {
+                selectedDice = computerPlayer.getSelectedDice();
+                showComputerInputDialog();
+            } else {
+                computerSelectCategory();
+            }
+        } else {
+            // Human player turn
+            if (rollCount == 0) {
+                // First roll
+                resetDiceSelections();
+                rollButton.setEnabled(true);  // Enable roll button
+                helpButton.setEnabled(true);  // Enable help button
+                manualInputButton.setEnabled(true);  // Enable manual input
+                continueButton.setVisibility(View.GONE);
+            }
+        }
+    }
+
+    private void showComputerInputDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Computer Turn")
+                .setMessage("Choose dice input method for roll " + (rollCount + 1))
+                .setPositiveButton("Random", (dialog, which) -> {
+                    if (rollCount == 0) {
+                        dice = new Dice();
+                        dice.rollAll();
+                    } else {
+                        dice.roll(selectedDice);
+                    }
+                    rollCount++;
+                    updateDiceImages();
+                    String analysis = computerPlayer.analyzeRoll(dice.getValues());
+                    showMessage("Computer's Analysis:\n" + analysis);
+
+                    if (rollCount < 3 && computerPlayer.shouldRollAgain()) {
+                        continueButton.setText("Continue to Roll " + (rollCount + 1));
+                        continueButton.setVisibility(View.VISIBLE);
+                    } else {
+                        continueButton.setText("Select Category");
+                        continueButton.setVisibility(View.VISIBLE);
+                    }
+                })
+                .setNegativeButton("Manual", (dialog, which) -> {
+                    manualInputButton.setEnabled(true);
+                    showManualDiceInput();
+                })
                 .show();
     }
 
@@ -776,7 +855,7 @@ public class MainActivity extends AppCompatActivity {
             headerRow.setBackgroundColor(Color.parseColor("#CCCCCC"));
 
             String[] headers = {"Category", "Human", "Computer", "Round"};
-            float[] weights = {2f, 1f, 1f, 1f};
+            float[] weights = {2f, 1f, 1f, 3.0f};  // Doubled Round column weight
 
             for (int i = 0; i < headers.length; i++) {
                 TextView headerView = new TextView(this);
@@ -812,7 +891,7 @@ public class MainActivity extends AppCompatActivity {
             computerScoreView.setText("-");
 
             TextView roundView = new TextView(this);
-            roundView.setLayoutParams(new TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f));
+            roundView.setLayoutParams(new TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 3.0f));  // Doubled Round column weight
             roundView.setGravity(Gravity.CENTER);
             roundView.setPadding(3, 3, 3, 3);
             roundView.setText("-");
@@ -858,7 +937,7 @@ public class MainActivity extends AppCompatActivity {
         computerTotal.setText("0");
 
         TextView empty = new TextView(this);
-        empty.setLayoutParams(new TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f));
+        empty.setLayoutParams(new TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 3.0f));  // Doubled Round column weight
 
         totalRow.addView(totalLabel);
         totalRow.addView(humanTotal);

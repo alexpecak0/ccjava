@@ -12,6 +12,7 @@ public class ComputerPlayer extends Player {
     private String lastCategory;
     private int lastScore;
     private int[] scorecard;
+    private int rollCount;
 
     public ComputerPlayer() {
         super("Computer");
@@ -19,6 +20,7 @@ public class ComputerPlayer extends Player {
         scorecard = new int[13];  // One for each category
         lastCategory = "";
         lastScore = 0;
+        rollCount = 0;
     }
 
     public String analyzeRoll(int[] diceValues) {
@@ -89,9 +91,40 @@ public class ComputerPlayer extends Player {
         // Reset dice selection
         Arrays.fill(selectedDice, false);
 
+        // If only one category is available, focus on that category
+        List<String> availableCategories = getAvailableCategories();
+        if (availableCategories.size() == 1) {
+            String onlyCategory = availableCategories.get(0);
+            currentStrategy = "Pursuing " + onlyCategory;
+
+            switch (onlyCategory) {
+                case "Yahtzee":
+                    handleYahtzeeStrategy(diceValues);
+                    break;
+                case "Large Straight":
+                    handleLargeStraightStrategy(diceValues);
+                    break;
+                case "Small Straight":
+                    handleSmallStraightStrategy(diceValues);
+                    break;
+                case "Full House":
+                    handleFullHouseStrategy(diceValues);
+                    break;
+                case "Four of a Kind":
+                    handleMultipleOfKindStrategy(diceValues, 4);
+                    break;
+                case "Three of a Kind":
+                    handleMultipleOfKindStrategy(diceValues, 3);
+                    break;
+                default:
+                    handleNumberStrategy(diceValues, onlyCategory);
+                    break;
+            }
+            return;
+        }
+
         // Calculate current game state
         int upperSectionScore = calculateUpperSectionScore();
-        int remainingRolls = 3; // This should be passed in from the game state
         boolean needsUpperBonus = upperSectionScore < 63;
 
         // Find best potential category considering game state
@@ -102,7 +135,7 @@ public class ComputerPlayer extends Player {
         for (Map.Entry<String, Integer> entry : potentialScores.entrySet()) {
             String category = entry.getKey();
             int score = entry.getValue();
-            double expectedValue = calculateExpectedValue(category, score, needsUpperBonus, remainingRolls);
+            double expectedValue = calculateExpectedValue(category, score, needsUpperBonus, 3);
 
             if (expectedValue > bestExpectedValue) {
                 bestExpectedValue = expectedValue;
@@ -111,36 +144,35 @@ public class ComputerPlayer extends Player {
             }
         }
 
-        if (bestCategory != null) {
-            switch (bestCategory) {
-                case "Yahtzee":
-                    handleYahtzeeStrategy(diceValues);
-                    break;
+        // If no good strategy found, set currentStrategy to null
+        if (bestCategory == null) {
+            currentStrategy = null;
+            return;
+        }
 
-                case "Large Straight":
-                    handleLargeStraightStrategy(diceValues);
-                    break;
-
-                case "Small Straight":
-                    handleSmallStraightStrategy(diceValues);
-                    break;
-
-                case "Full House":
-                    handleFullHouseStrategy(diceValues);
-                    break;
-
-                case "Four of a Kind":
-                    handleMultipleOfKindStrategy(diceValues, 4);
-                    break;
-
-                case "Three of a Kind":
-                    handleMultipleOfKindStrategy(diceValues, 3);
-                    break;
-
-                default:
-                    handleNumberStrategy(diceValues, bestCategory);
-                    break;
-            }
+        // Apply the best strategy found
+        switch (bestCategory) {
+            case "Yahtzee":
+                handleYahtzeeStrategy(diceValues);
+                break;
+            case "Large Straight":
+                handleLargeStraightStrategy(diceValues);
+                break;
+            case "Small Straight":
+                handleSmallStraightStrategy(diceValues);
+                break;
+            case "Full House":
+                handleFullHouseStrategy(diceValues);
+                break;
+            case "Four of a Kind":
+                handleMultipleOfKindStrategy(diceValues, 4);
+                break;
+            case "Three of a Kind":
+                handleMultipleOfKindStrategy(diceValues, 3);
+                break;
+            default:
+                handleNumberStrategy(diceValues, bestCategory);
+                break;
         }
     }
 
@@ -383,6 +415,72 @@ public class ComputerPlayer extends Player {
     public String selectCategory(int[] diceValues) {
         Map<String, Integer> scores = new HashMap<>();
         List<String> availableCategories = getAvailableCategories();
+
+        // If only one category remains
+        if (availableCategories.size() == 1) {
+            String onlyCategory = availableCategories.get(0);
+            int score = Helper.calculateScore(onlyCategory, diceValues);
+
+            // Special handling for Full House
+            if (onlyCategory.equals("Full House")) {
+                int[] counts = getCounts(diceValues);
+                boolean hasThree = false;
+                int threeValue = -1;
+                boolean hasTwo = false;
+                int twoValue = -1;
+
+                // Find three of a kind and pair values
+                for (int i = 1; i <= 6; i++) {
+                    if (counts[i] >= 3) {
+                        hasThree = true;
+                        threeValue = i;
+                    } else if (counts[i] >= 2) {
+                        hasTwo = true;
+                        twoValue = i;
+                    }
+                }
+
+                // If we have a valid Full House, score it
+                if (hasThree && hasTwo) {
+                    lastCategory = onlyCategory;
+                    lastScore = score;
+                    super.fillCategory(onlyCategory, score);
+                    return onlyCategory;
+                }
+
+                // If we have three of a kind and can roll again
+                if (rollCount < 3 && hasThree) {
+                    // Keep the three of a kind and try for a pair
+                    for (int i = 0; i < diceValues.length; i++) {
+                        selectedDice[i] = (diceValues[i] == threeValue);
+                    }
+                    return null; // Signal we want to roll again
+                }
+
+                // If we have a pair and can roll again
+                if (rollCount < 3 && hasTwo) {
+                    // Keep the pair and try for three of a kind
+                    for (int i = 0; i < diceValues.length; i++) {
+                        selectedDice[i] = (diceValues[i] == twoValue);
+                    }
+                    return null; // Signal we want to roll again
+                }
+
+                // If we're on our last roll or have nothing promising, we have to score it
+                lastCategory = onlyCategory;
+                lastScore = score;
+                super.fillCategory(onlyCategory, score);
+                return onlyCategory;
+            }
+
+            // For any other category
+            lastCategory = onlyCategory;
+            lastScore = score;
+            super.fillCategory(onlyCategory, score);
+            return onlyCategory;
+        }
+
+        // Normal category selection logic for multiple available categories
         for (String category : availableCategories) {
             scores.put(category, Helper.calculateScore(category, diceValues));
         }
