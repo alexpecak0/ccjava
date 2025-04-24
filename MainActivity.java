@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 import android.util.Log;
 import java.util.Collections;
+import android.widget.NumberPicker;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -48,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private StringBuilder gameLog;
     private int roundNumber;
     private boolean[] selectedDice;
+    private int[] lastScoringDice;  // Add this field to store dice values when scoring
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,31 +166,113 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Determine First Player");
         builder.setMessage("Each player must roll one die. Highest roll goes first.");
-        builder.setPositiveButton("Roll Dice", (dialog, which) -> {
+        
+        // Add option for manual input
+        builder.setPositiveButton("Random Roll", (dialog, which) -> {
             int humanRoll = new Random().nextInt(6) + 1;
             int computerRoll = new Random().nextInt(6) + 1;
 
-            String message = String.format("Human rolled: %d\nComputer rolled: %d\n\n%s",
-                    humanRoll,
-                    computerRoll,
-                    humanRoll > computerRoll ? "Human plays first!" :
-                            computerRoll > humanRoll ? "Computer plays first!" :
-                                    "Tie! Rolling again...");
-
-            AlertDialog.Builder resultDialog = new AlertDialog.Builder(this);
-            resultDialog.setTitle("Roll Result")
-                    .setMessage(message)
-                    .setPositiveButton("OK", (resultDlg, resultWhich) -> {
-                        if (humanRoll == computerRoll) {
-                            determineFirstPlayer();
-                        } else {
-                            currentPlayer = (humanRoll > computerRoll) ? humanPlayer : computerPlayer;
-                            startTurn();
-                        }
-                    })
-                    .show();
+            showRollResults(humanRoll, computerRoll);
         });
+        
+        builder.setNegativeButton("Manual Input", (dialog, which) -> {
+            showManualFirstPlayerDiceInput();
+        });
+        
         builder.show();
+    }
+    
+    private void showRollResults(int humanRoll, int computerRoll) {
+        String message = String.format("Human rolled: %d\nComputer rolled: %d\n\n%s",
+                humanRoll,
+                computerRoll,
+                humanRoll > computerRoll ? "Human plays first!" :
+                        computerRoll > humanRoll ? "Computer plays first!" :
+                                "Tie! Rolling again...");
+
+        AlertDialog.Builder resultDialog = new AlertDialog.Builder(this);
+        resultDialog.setTitle("Roll Result")
+                .setMessage(message)
+                .setPositiveButton("OK", (resultDlg, resultWhich) -> {
+                    if (humanRoll == computerRoll) {
+                        determineFirstPlayer();
+                    } else {
+                        currentPlayer = (humanRoll > computerRoll) ? humanPlayer : computerPlayer;
+                        startTurn();
+                    }
+                })
+                .show();
+    }
+    
+    private void showManualFirstPlayerDiceInput() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.first_player_dice_dialog, null);
+        
+        // Setup number pickers for human and computer dice
+        NumberPicker humanDiceValue = dialogView.findViewById(R.id.humanDicePicker);
+        NumberPicker computerDiceValue = dialogView.findViewById(R.id.computerDicePicker);
+        
+        // Setup dice images
+        ImageView humanDiceImage = dialogView.findViewById(R.id.humanDiceImage);
+        ImageView computerDiceImage = dialogView.findViewById(R.id.computerDiceImage);
+        
+        // Configure number pickers (1-6 for dice values)
+        if (humanDiceValue != null && computerDiceValue != null) {
+            // Set range 1-6
+            humanDiceValue.setMinValue(1);
+            humanDiceValue.setMaxValue(6);
+            computerDiceValue.setMinValue(1);
+            computerDiceValue.setMaxValue(6);
+            
+            // Set initial values
+            humanDiceValue.setValue(6); // Default to 6 for human (to make testing easier)
+            computerDiceValue.setValue(1); // Default to 1 for computer
+            
+            // Update dice images when values change
+            humanDiceValue.setOnValueChangedListener((picker, oldVal, newVal) -> {
+                if (humanDiceImage != null) {
+                    int resourceId = getResources().getIdentifier(
+                            "dice_" + newVal, "drawable", getPackageName());
+                    humanDiceImage.setImageResource(resourceId);
+                }
+            });
+            
+            computerDiceValue.setOnValueChangedListener((picker, oldVal, newVal) -> {
+                if (computerDiceImage != null) {
+                    int resourceId = getResources().getIdentifier(
+                            "dice_" + newVal, "drawable", getPackageName());
+                    computerDiceImage.setImageResource(resourceId);
+                }
+            });
+            
+            // Set initial dice images
+            if (humanDiceImage != null) {
+                int resourceId = getResources().getIdentifier(
+                        "dice_" + humanDiceValue.getValue(), "drawable", getPackageName());
+                humanDiceImage.setImageResource(resourceId);
+            }
+            
+            if (computerDiceImage != null) {
+                int resourceId = getResources().getIdentifier(
+                        "dice_" + computerDiceValue.getValue(), "drawable", getPackageName());
+                computerDiceImage.setImageResource(resourceId);
+            }
+        }
+        
+        builder.setView(dialogView)
+                .setTitle("Manual Dice Input")
+                .setPositiveButton("OK", (dialog, which) -> {
+                    // Get selected values
+                    int humanRoll = humanDiceValue != null ? humanDiceValue.getValue() : 1;
+                    int computerRoll = computerDiceValue != null ? computerDiceValue.getValue() : 1;
+                    
+                    showRollResults(humanRoll, computerRoll);
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    // Go back to first player selection
+                    determineFirstPlayer();
+                })
+                .show();
     }
 
     private void startTurn() {
@@ -272,6 +356,7 @@ public class MainActivity extends AppCompatActivity {
                     .setPositiveButton("Random", (dialog, which) -> {
                         dice.roll(selectedDice);
                         rollCount++;
+                        computerPlayer.setRollCount(rollCount); // Update computer's roll count
                         updateDiceImages();
                         String analysis = computerPlayer.analyzeRoll(dice.getValues());
                         showMessage("Computer's Analysis:\n" + analysis);
@@ -284,10 +369,9 @@ public class MainActivity extends AppCompatActivity {
                     })
                     .setNegativeButton("Manual", (dialog, which) -> {
                         // Store computer's selections before manual input
-                        boolean[] keptDice = computerPlayer.getSelectedDice();
-                        selectedDice = keptDice;  // Save which dice computer wants to keep
+                        selectedDice = computerPlayer.getSelectedDice();
                         manualInputButton.setEnabled(true);
-                        showManualDiceInput();
+                        showComputerManualDiceInput();  // Use the specialized method for computer
                     })
                     .show();
         } else {
@@ -298,6 +382,7 @@ public class MainActivity extends AppCompatActivity {
     private void computerFirstRoll() {
         dice.rollAll();
         rollCount = 1;
+        computerPlayer.setRollCount(rollCount); // Update computer's roll count
         updateDiceImages();
 
         String analysis = computerPlayer.analyzeRoll(dice.getValues());
@@ -316,6 +401,7 @@ public class MainActivity extends AppCompatActivity {
         // Similar to first roll but for second roll
         dice.roll(computerPlayer.getSelectedDice());
         rollCount = 2;
+        computerPlayer.setRollCount(rollCount); // Update computer's roll count
         updateDiceImages();
 
         String analysis = computerPlayer.analyzeRoll(dice.getValues());
@@ -333,6 +419,7 @@ public class MainActivity extends AppCompatActivity {
     private void computerFinalRoll() {
         dice.roll(computerPlayer.getSelectedDice());
         rollCount = 3;
+        computerPlayer.setRollCount(rollCount); // Update computer's roll count
         updateDiceImages();
 
         new Handler().postDelayed(() -> {
@@ -341,6 +428,55 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void computerSelectCategory() {
+        // Store the final dice values before computer's selection
+        lastScoringDice = dice.getValues().clone();
+
+        // First try to apply our Three of a Kind fix
+        if (rollCount == 3) { // Only apply on final roll
+            // Calculate scores for all available categories
+            List<String> availableCategories = computerPlayer.getAvailableCategories();
+            Map<String, Integer> rawScores = new HashMap<>();
+            for (String category : availableCategories) {
+                int score = Helper.calculateScore(category, dice.getValues());
+                rawScores.put(category, score);
+            }
+            
+            // Try Three of a Kind fixer first
+            String threeKindFixedCategory = ThreeOfAKindFixer.fixCategorySelection(dice.getValues(), rawScores, rollCount);
+            if (threeKindFixedCategory != null) {
+                int score = rawScores.get(threeKindFixedCategory);
+                computerPlayer.fillCategory(threeKindFixedCategory, score);
+                updateScorecardDisplay(threeKindFixedCategory, score, false, roundNumber);
+                showMessage("Computer selects " + threeKindFixedCategory + " for " + score + " points (Three of a Kind Fix)");
+                
+                new Handler().postDelayed(() -> {
+                    endTurn();
+                }, 1500);
+                return;
+            }
+        }
+
+        // Try to apply our direct fix for the Four of a Kind issue
+        String fixedCategory = null;
+        if (rollCount == 3) { // Only on final roll
+            fixedCategory = DirectFix.fixComputerChoice(dice.getValues(), computerPlayer.getAvailableCategories());
+        }
+        
+        // If our fix returned a category, use it
+        if (fixedCategory != null) {
+            String category = fixedCategory;
+            int score = Helper.calculateScore(category, dice.getValues());
+            computerPlayer.fillCategory(category, score);
+            updateScorecardDisplay(category, score, false, roundNumber);
+            showMessage("Computer selects " + category + " for " + score + " points");
+            
+            new Handler().postDelayed(() -> {
+                endTurn();
+            }, 1500);
+            return;
+        }
+        
+        // Otherwise, continue with normal logic
         String category = computerPlayer.selectCategory(dice.getValues());
 
         // If category is null, computer wants to roll again
@@ -350,8 +486,28 @@ public class MainActivity extends AppCompatActivity {
                 showComputerInputDialog();
                 return;
             }
-            // If we're on our last roll, we have to select a category
-            category = computerPlayer.getAvailableCategories().get(0);
+            // If we're on our last roll and no valid category was found, pass turn to next player
+            List<String> availableCategories = computerPlayer.getAvailableCategories();
+            boolean hasValidScore = false;
+            for (String availableCategory : availableCategories) {
+                if (Helper.calculateScore(availableCategory, dice.getValues()) > 0) {
+                    hasValidScore = true;
+                    break;
+                }
+            }
+            if (!hasValidScore) {
+                showMessage("Computer has no valid scoring categories. Turn passes to next player.");
+                endTurn();
+                return;
+            }
+            // If we have at least one valid scoring category, select the best one
+            for (String availableCategory : availableCategories) {
+                int score = Helper.calculateScore(availableCategory, dice.getValues());
+                if (score > 0) {
+                    category = availableCategory;
+                    break;
+                }
+            }
         }
 
         int score = Helper.calculateScore(category, dice.getValues());
@@ -365,16 +521,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void promptForCategorySelection() {
-        List<String> availableCategories = currentPlayer.getAvailableCategories();
-        String[] categories = availableCategories.toArray(new String[0]);
+        // Store the final dice values before showing dialog
+        lastScoringDice = dice.getValues().clone();
 
+        List<String> availableCategories = currentPlayer.getAvailableCategories();
+        List<String> scoringCategories = new ArrayList<>();
+
+        // Only include categories where the player can score points
+        for (String category : availableCategories) {
+            int score = Helper.calculateScore(category, dice.getValues());
+            if (score > 0) {
+                scoringCategories.add(category);
+            }
+        }
+
+        // If no categories can score points, show a message and pass turn to next player
+        if (scoringCategories.isEmpty()) {
+            showMessage("No valid scoring categories available. Turn passes to next player.");
+            endTurn();
+            return;
+        }
+
+        // If we have valid scoring categories, show them
+        String[] categories = scoringCategories.toArray(new String[0]);
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Select Category");
         builder.setItems(categories, (dialog, which) -> {
             String selectedCategory = categories[which];
             int score = Helper.calculateScore(selectedCategory, dice.getValues());
             currentPlayer.fillCategory(selectedCategory, score);
-            // Add this line right here, after fillCategory:
             updateScorecardDisplay(selectedCategory, score, currentPlayer == humanPlayer, roundNumber);
             showMessage("Scored " + score + " points in " + selectedCategory);
             endTurn();
@@ -397,6 +572,14 @@ public class MainActivity extends AppCompatActivity {
     private void switchPlayers() {
         // Simply alternate between players
         currentPlayer = (currentPlayer == humanPlayer) ? computerPlayer : humanPlayer;
+
+        // Reset dice selections when switching players to avoid inheriting from previous player
+        resetDiceSelections();
+        
+        // If switching to computer player, also reset its internal selection state
+        if (currentPlayer == computerPlayer) {
+            computerPlayer.resetDiceSelections();
+        }
 
         // Only increment round number after both players have gone
         if (currentPlayer == computerPlayer) {  // Start of new round
@@ -434,7 +617,8 @@ public class MainActivity extends AppCompatActivity {
         String helpText = Helper.getAdvice(dice.getValues(),
                 selectedDice,
                 rollCount,
-                humanPlayer.getAvailableCategories());
+                humanPlayer.getAvailableCategories(),
+                humanPlayer.getScores());
         showMessage("Help", helpText);
     }
 
@@ -445,9 +629,20 @@ public class MainActivity extends AppCompatActivity {
     private void logTurn() {
         gameLog.append("Round ").append(roundNumber).append(": ")
                 .append(currentPlayer == humanPlayer ? "Human" : "Computer")
-                .append(" scored ").append(currentPlayer.getLastScore())
+                .append("'s Turn\n");
+
+        // Only show dice information if we have it (new games)
+        if (lastScoringDice != null) {
+            gameLog.append("Dice Rolled: ");
+            for (int value : lastScoringDice) {
+                gameLog.append(value).append(" ");
+            }
+            gameLog.append("\n");
+        }
+
+        gameLog.append("Scored ").append(currentPlayer.getLastScore())
                 .append(" points in ").append(currentPlayer.getLastCategory())
-                .append("\n");
+                .append("\n\n");
     }
 
     private void updateUI() {
@@ -492,6 +687,10 @@ public class MainActivity extends AppCompatActivity {
         standButton.setEnabled(isHumanTurn && rollCount > 0);
         helpButton.setEnabled(isHumanTurn);
         manualInputButton.setEnabled(isHumanTurn);
+        
+        // Always enable save and load buttons
+        saveButton.setEnabled(true);
+        loadButton.setEnabled(true);
 
         // Handle continue button visibility
         if (isHumanTurn) {
@@ -577,15 +776,39 @@ public class MainActivity extends AppCompatActivity {
                         writer.write("Round: " + roundNumber + "\n\n");
                         writer.write("Scorecard:\n");
 
-                        // Write scorecard data
+                        // Write scorecard data with correct round info and player ownership
                         for (String category : Constants.CATEGORIES) {
-                            int humanScore = humanPlayer.getScore(category);
-                            int computerScore = computerPlayer.getScore(category);
-
-                            if (humanPlayer.isCategoryFilled(category)) {
-                                writer.write(humanScore + " Human " + roundNumber + "\n");
-                            } else if (computerPlayer.isCategoryFilled(category)) {
-                                writer.write(computerScore + " Computer " + roundNumber + "\n");
+                            TableRow row = categoryRows.get(category);
+                            if (row == null) continue;
+                            
+                            // Extract round information from UI
+                            TextView roundView = (TextView) row.getChildAt(3);
+                            String roundText = roundView.getText().toString();
+                            int round = "-".equals(roundText) ? roundNumber : Integer.parseInt(roundText);
+                            
+                            // Get scores from both human and computer players
+                            int humanScore = 0;
+                            int computerScore = 0;
+                            
+                            // Check human score
+                            TextView humanScoreView = (TextView) row.getChildAt(1);
+                            String humanScoreText = humanScoreView.getText().toString();
+                            if (!"-".equals(humanScoreText)) {
+                                humanScore = Integer.parseInt(humanScoreText);
+                            }
+                            
+                            // Check computer score
+                            TextView computerScoreView = (TextView) row.getChildAt(2);
+                            String computerScoreText = computerScoreView.getText().toString();
+                            if (!"-".equals(computerScoreText)) {
+                                computerScore = Integer.parseInt(computerScoreText);
+                            }
+                            
+                            // Write the appropriate score based on who filled the category
+                            if (!"-".equals(humanScoreText)) {
+                                writer.write(humanScore + " Human " + round + "\n");
+                            } else if (!"-".equals(computerScoreText)) {
+                                writer.write(computerScore + " Computer " + round + "\n");
                             } else {
                                 writer.write("0\n");
                             }
@@ -697,6 +920,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Track selected values for each die
         int[] selectedValues = new int[5];
+        
+        // Save the current dice values for reference
+        int[] currentDiceValues = dice.getValues();
 
         // Setup click listeners for all dice images
         for (int diePosition = 1; diePosition <= 5; diePosition++) {
@@ -730,17 +956,40 @@ public class MainActivity extends AppCompatActivity {
                         selectedValues[diePos - 1] = dieValue;
                     });
 
-                    // If die is already set (in a reroll), disable selection
-                    if (rollCount > 0 && selectedDice[diePosition - 1]) {
-                        dieImage.setEnabled(false);
-                        if (dice.getValues()[diePosition - 1] == value) {
+                    // Special handling for computer player
+                    if (rollCount > 0 && currentPlayer == computerPlayer) {
+                        // Check if current position's die should be kept (selectedDice[pos-1] is true)
+                        boolean isDicePositionHeld = selectedDice[diePosition - 1];
+                        
+                        // Check if the current value is already on the die at this position
+                        boolean isCurrentValue = (currentDiceValues[diePosition - 1] == value);
+                        
+                        if (isDicePositionHeld && isCurrentValue) {
+                            // This is a die that's held at its current position and value
+                            dieImage.setEnabled(false);
                             dieImage.setAlpha(1.0f);
-                            selectedValues[diePosition - 1] = value;
-                        } else {
+                            selectedValues[diePos - 1] = value;
+                        } else if (isDicePositionHeld) {
+                            // Position is held but not this value
+                            dieImage.setEnabled(false);
                             dieImage.setAlpha(0.2f);
+                        } else {
+                            // Not held - normal selectable die
+                            dieImage.setAlpha(0.5f);
                         }
                     } else {
-                        dieImage.setAlpha(0.5f);
+                        // Regular handling for human player or first roll
+                        if (rollCount > 0 && selectedDice[diePosition - 1]) {
+                            dieImage.setEnabled(false);
+                            if (dice.getValues()[diePosition - 1] == value) {
+                                dieImage.setAlpha(1.0f);
+                                selectedValues[diePosition - 1] = value;
+                            } else {
+                                dieImage.setAlpha(0.2f);
+                            }
+                        } else {
+                            dieImage.setAlpha(0.5f);
+                        }
                     }
                 }
             }
@@ -820,6 +1069,7 @@ public class MainActivity extends AppCompatActivity {
                         dice.roll(selectedDice);
                     }
                     rollCount++;
+                    computerPlayer.setRollCount(rollCount); // Update computer's roll count
                     updateDiceImages();
                     String analysis = computerPlayer.analyzeRoll(dice.getValues());
                     showMessage("Computer's Analysis:\n" + analysis);
@@ -834,7 +1084,7 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Manual", (dialog, which) -> {
                     manualInputButton.setEnabled(true);
-                    showManualDiceInput();
+                    showComputerManualDiceInput();  // Use the specialized method
                 })
                 .show();
     }
@@ -965,5 +1215,170 @@ public class MainActivity extends AppCompatActivity {
 
         humanTotal.setText(String.valueOf(humanPlayer.getTotalScore()));
         computerTotal.setText(String.valueOf(computerPlayer.getTotalScore()));
+    }
+
+    // New specialized method for computer manual dice input
+    private void showComputerManualDiceInput() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.manual_input_dialog, null);
+
+        // Track selected values for each die
+        int[] selectedValues = new int[5];
+        
+        // Get current dice values
+        int[] currentDiceValues = dice.getValues();
+        
+        // Get the strategy from the computer player to display in the dialog
+        String strategy = computerPlayer.getCurrentStrategy();
+        
+        // Create a set of values that need to be kept based on the strategy
+        int[] valuesToKeep = new int[7]; // 0-6, ignore 0
+        
+        // For Full House strategy, we need to identify the pairs/three of a kind values
+        if (strategy != null && strategy.contains("Full House")) {
+            int[] counts = new int[7]; // 0-6, ignore 0
+            for (int value : currentDiceValues) {
+                counts[value]++;
+            }
+            
+            // Special case: If all dice have the same value (like five 1s)
+            // We should keep only three and reroll the other two
+            boolean allSameValue = false;
+            int sameValue = -1;
+            
+            for (int i = 1; i <= 6; i++) {
+                if (counts[i] == 5) {
+                    allSameValue = true;
+                    sameValue = i;
+                    break;
+                }
+            }
+            
+            if (allSameValue) {
+                // For a Full House, we only need to keep 3 of the same value
+                valuesToKeep[sameValue] = 3; // Keep only 3, not all 5
+            } else {
+                // Normal case: Find values with counts >= 2 (pairs or three of a kind)
+                for (int i = 1; i <= 6; i++) {
+                    if (counts[i] >= 2) {
+                        // Mark these values to be kept
+                        valuesToKeep[i] = counts[i]; // Keep track of how many of each value to keep
+                    }
+                }
+            }
+        } else {
+            // For other strategies, just identify values to keep based on selectedDice
+            for (int i = 0; i < selectedDice.length; i++) {
+                if (selectedDice[i] && currentDiceValues[i] >= 1 && currentDiceValues[i] <= 6) {
+                    valuesToKeep[currentDiceValues[i]]++;
+                }
+            }
+        }
+        
+        // First mark which positions to keep based on values
+        boolean[] positionsToKeep = new boolean[5];
+        int[] keptCount = new int[7]; // Track how many of each value we've already marked to keep
+        
+        // For Full House strategy, keep all positions with the values identified
+        if (strategy != null && strategy.contains("Full House")) {
+            for (int i = 0; i < 5; i++) {
+                int value = currentDiceValues[i];
+                if (valuesToKeep[value] > 0 && keptCount[value] < valuesToKeep[value]) {
+                    positionsToKeep[i] = true;
+                    keptCount[value]++;
+                }
+            }
+        } else {
+            // Use regular selectedDice for other strategies
+            positionsToKeep = selectedDice.clone();
+        }
+
+        // Setup click listeners for all dice images
+        for (int diePosition = 1; diePosition <= 5; diePosition++) {
+            for (int value = 1; value <= 6; value++) {
+                final int diePos = diePosition;
+                final int dieValue = value;
+
+                int resId = getResources().getIdentifier(
+                        "die" + diePosition + "_" + value,
+                        "id",
+                        getPackageName()
+                );
+
+                ImageView dieImage = dialogView.findViewById(resId);
+                if (dieImage != null) {
+                    dieImage.setOnClickListener(v -> {
+                        // Reset opacity for all dice in this row
+                        for (int i = 1; i <= 6; i++) {
+                            int resetId = getResources().getIdentifier(
+                                    "die" + diePos + "_" + i,
+                                    "id",
+                                    getPackageName()
+                            );
+                            ImageView resetImage = dialogView.findViewById(resetId);
+                            if (resetImage != null) {
+                                resetImage.setAlpha(0.5f);
+                            }
+                        }
+                        // Highlight selected die
+                        dieImage.setAlpha(1.0f);
+                        selectedValues[diePos - 1] = dieValue;
+                    });
+
+                    // Set initial state based on whether this die/value is to be kept
+                    if (positionsToKeep[diePosition-1]) {
+                        if (currentDiceValues[diePosition-1] == value) {
+                            // This is the current value at this position and it's selected
+                            dieImage.setEnabled(false);
+                            dieImage.setAlpha(1.0f);
+                            selectedValues[diePos - 1] = value;
+                        } else {
+                            // Not the current value, but this position is locked
+                            dieImage.setEnabled(false);
+                            dieImage.setAlpha(0.2f);
+                        }
+                    } else {
+                        // Not a kept position
+                        dieImage.setAlpha(0.5f);
+                    }
+                }
+            }
+        }
+
+        builder.setView(dialogView)
+                .setTitle("Select Dice Values - Computer Strategy: " + (strategy != null ? strategy : "None"))
+                .setPositiveButton("OK", (dialog, which) -> {
+                    // Validate all dice have been selected
+                    boolean allSelected = true;
+                    for (int i = 0; i < 5; i++) {
+                        if (selectedValues[i] == 0) {
+                            allSelected = false;
+                            break;
+                        }
+                    }
+
+                    if (allSelected) {
+                        dice.setManualValues(selectedValues);
+                        rollCount++;
+                        updateUI();
+                        showAvailableCategories();
+
+                        String analysis = computerPlayer.analyzeRoll(dice.getValues());
+                        showMessage("Computer's Analysis:\n" + analysis);
+
+                        if (rollCount < 3) {
+                            continueButton.setText("Continue to Roll " + (rollCount + 1));
+                            continueButton.setVisibility(View.VISIBLE);
+                        } else {
+                            continueButton.setText("Select Category");
+                            continueButton.setVisibility(View.VISIBLE);
+                        }
+                    } else {
+                        showMessage("Please select a value for each die");
+                        showComputerManualDiceInput();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 }

@@ -172,4 +172,8 @@ public class Player {
             index++;
         }
     }
+
+    public Map<String, Integer> getScores() {
+        return new HashMap<>(scorecard); // Return a copy to prevent modification
+    }
 }

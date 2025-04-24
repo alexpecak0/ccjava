@@ -33,17 +33,22 @@ public class Dice {
             held[i] = false;
         }
     }
-    public void roll(boolean[] diceToRoll) {
+    
+    public void roll(boolean[] diceToKeep) {
+        // If we were in manual mode, clear the flag but CONTINUE to roll
         if (manualMode) {
             manualMode = false;
-            return;
+            // Don't return - continue processing to roll dice
         }
+        
         // Roll dice that are NOT selected (not held)
+        // In the game, selectedDice represents dice to KEEP (not reroll)
         for (int i = 0; i < Constants.DICE_COUNT; i++) {
-            if (!diceToRoll[i]) {  // Changed condition to roll unselected dice
+            if (!diceToKeep[i]) {  // If dice is NOT selected to keep, then roll it
                 values[i] = random.nextInt(Constants.DIE_MAX_VALUE) + 1;
             }
-            held[i] = diceToRoll[i];  // Update held state - selected dice are held
+            // Update held state to match selection
+            held[i] = diceToKeep[i];
         }
     }
 
